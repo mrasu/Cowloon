@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package protos;
+
+import "wrappers.proto";
+
+
+// protoc -I pkg/protos/ pkg/protos/user_message.proto --go_out=plugins=grpc:pkg/protos
+
+service UserMessage {
+    rpc SendSql(SqlRequest) returns (SqlResponse) {}
+}
+
+message SqlRequest {
+    string key = 1;
+    string sql = 2;
+}
+
+message SqlResponse {
+    repeated Row rows = 1;
+}
+
+message Row {
+    repeated Column columns = 1;
+}
+
+message Column {
+    google.protobuf.StringValue value = 1;
+}
+

@@ -1,15 +1,16 @@
 package main
 
 import (
-	"google.golang.org/grpc"
-	"github.com/mrasu/Cowloon/pkg/protos"
-	"google.golang.org/grpc/reflection"
+	"fmt"
 	"net"
+
 	"github.com/mrasu/Cowloon/pkg/gateway"
+	"github.com/mrasu/Cowloon/pkg/protos"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
-
-const(
+const (
 	port = ":15501"
 )
 
@@ -26,4 +27,18 @@ func main() {
 	if err = s.Serve(lis); err != nil {
 		panic(err)
 	}
+	// runUpdate()
+}
+
+func runUpdate() {
+	db, err := gateway.NewDb("root@tcp(127.0.0.1:13307)/cowloon")
+	if err != nil {
+		panic(err)
+	}
+
+	rows, err := db.Exec(`UPDATE messages SET text = CONCAT(text, "COOLA") WHERE id = 2`)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(rows)
 }

@@ -11,6 +11,8 @@ import (
 )
 
 func main() {
+	// execQuery("cluster1")
+	fmt.Println("========")
 	runQueries()
 }
 
@@ -59,7 +61,7 @@ func runQuery(key string) {
 		Sql: "SELECT id, text FROM messages",
 		Key: key,
 	}
-	r, err := c.SendSql(ctx, req)
+	r, err := c.Query(ctx, req)
 	if err != nil {
 		panic(err)
 	}
@@ -74,4 +76,28 @@ func runQuery(key string) {
 		}
 		fmt.Println("*********")
 	}
+}
+
+func execQuery(key string) {
+	conn, err := grpc.Dial("localhost:15501", grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	c := protos.NewUserMessageClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	req := &protos.SqlRequest{
+		Sql: `UPDATE messages SET text = CONCAT(text, "COOLA") WHERE id = 2`,
+		Key: key,
+	}
+	r, err := c.Exec(ctx, req)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("RowsAffected: %d\n", r.RowsAffected)
+	fmt.Printf("LastInsertedId: %d\n", r.LastInsertedId)
 }

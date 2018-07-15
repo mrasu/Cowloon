@@ -24,7 +24,7 @@ func NewDb(ds string) (*Db, error) {
 	}, nil
 }
 
-func (d *Db) execSql(sqlText string) ([]*protos.Row, error) {
+func (d *Db) Query(sqlText string) ([]*protos.Row, error) {
 	rows, err := d.db.Query(sqlText)
 	if err != nil {
 		return nil, err
@@ -63,6 +63,15 @@ func (d *Db) execSql(sqlText string) ([]*protos.Row, error) {
 	}
 
 	return resultRows, nil
+}
+
+func (d *Db) Exec(sqlText string) (sql.Result, error) {
+	result, err := d.db.Exec(sqlText)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (d *Db) Close() error {

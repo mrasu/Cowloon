@@ -2,56 +2,17 @@ package gateway
 
 import (
 	"database/sql"
-	"github.com/mrasu/Cowloon/pkg/protos"
-	"github.com/golang/protobuf/ptypes/wrappers"
-	"sync"
-)
 
-const(
-	dataSource1 = "root@tcp(127.0.0.1:13306)/cowloon"
-	dataSource2 = "root@tcp(127.0.0.1:13307)/cowloon"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/mrasu/Cowloon/pkg/protos"
 )
 
 type Db struct {
 	datasource string
-	db *sql.DB
+	db         *sql.DB
 }
 
-var dbs = map[int64]*Db{}
-var mu sync.RWMutex
-
-func getDb(key string) (*Db, error) {
-	lastChar := key[len(key)-1]
-	dbIndex := int64(lastChar) & 1
-
-	mu.RLock()
-	db, ok := dbs[dbIndex]
-	mu.RUnlock()
-
-	if ok {
-		return db, nil
-	}
-
-	var ds string
-
-	if int64(lastChar) & 1 == 1 {
-		ds =  dataSource1
-	} else {
-		ds = dataSource2
-	}
-
-	db, err := newDb(ds)
-	if err != nil {
-		return nil, err
-	}
-
-	mu.Lock()
-	dbs[dbIndex] = db
-	mu.Unlock()
-	return db, nil
-}
-
-func newDb(ds string) (*Db, error) {
+func NewDb(ds string) (*Db, error) {
 	db, err := sql.Open("mysql", ds)
 	if err != nil {
 		return nil, err
@@ -59,12 +20,11 @@ func newDb(ds string) (*Db, error) {
 
 	return &Db{
 		datasource: ds,
-		db: db,
+		db:         db,
 	}, nil
 }
 
-
-func (d *Db) execSql(sqlText string) ([]*protos.Row, error){
+func (d *Db) execSql(sqlText string) ([]*protos.Row, error) {
 	rows, err := d.db.Query(sqlText)
 	if err != nil {
 		return nil, err
@@ -103,4 +63,8 @@ func (d *Db) execSql(sqlText string) ([]*protos.Row, error){
 	}
 
 	return resultRows, nil
+}
+
+func (d *Db) Close() error {
+	return d.db.Close()
 }

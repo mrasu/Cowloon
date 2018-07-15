@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"errors"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mrasu/Cowloon/pkg/protos"
-	"errors"
 )
 
 type Server struct {
-
 }
 
 func (s *Server) SendSql(ctx context.Context, in *protos.SqlRequest) (*protos.SqlResponse, error) {
@@ -18,8 +18,13 @@ func (s *Server) SendSql(ctx context.Context, in *protos.SqlRequest) (*protos.Sq
 		return nil, errors.New("key is empty")
 	}
 
-	fmt.Println("EXECUTE SQL!!!!", in.Sql)
-	d, err := getDb(in.Key)
+	fmt.Printf("EXECUTE SQL!!!!: key: %s, sql: `%s`\n", in.Key, in.Sql)
+	r, err := NewRouter()
+	if err != nil {
+		return nil, err
+	}
+
+	d, err := r.GetDb(in.Key)
 	if err != nil {
 		return nil, err
 	}

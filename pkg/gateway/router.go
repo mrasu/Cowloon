@@ -14,6 +14,8 @@ import (
 const (
 	dataSource1 = "root@tcp(127.0.0.1:13306)/cowloon"
 	dataSource2 = "root@tcp(127.0.0.1:13307)/cowloon"
+
+	shardKeyPrefix = "shardKey/"
 )
 
 var dsMap = map[string]string{
@@ -23,9 +25,9 @@ var dsMap = map[string]string{
 var mu sync.RWMutex
 
 type Router struct {
-	dbKeyMap  map[string]string
-	dbNameMap map[string]*Db
-	etcdCli   *clientv3.Client
+	shardKeyMap map[string]string
+	shardMap    map[string]*Db
+	etcdCli     *clientv3.Client
 }
 
 func NewRouter() (*Router, error) {
@@ -41,27 +43,27 @@ func NewRouter() (*Router, error) {
 	}
 
 	return &Router{
-		dbKeyMap:  map[string]string{},
-		dbNameMap: map[string]*Db{},
-		etcdCli:   cli,
+		shardKeyMap: map[string]string{},
+		shardMap:    map[string]*Db{},
+		etcdCli:     cli,
 	}, nil
 }
 
 func (r *Router) GetDb(key string) (db *Db, err error) {
-	dbName, ok := r.dbKeyMap[key]
+	shardName, ok := r.shardKeyMap[key]
 	if !ok {
-		dbName, err = r.fetchDbName(key)
+		shardName, err = r.fetchDbName(key)
 		if err != nil {
 			return
 		}
-		r.dbKeyMap[key] = dbName
+		r.shardKeyMap[key] = shardName
 	}
 
 	mu.RLock()
-	db, ok = r.dbNameMap[dbName]
+	db, ok = r.shardMap[shardName]
 	mu.RUnlock()
 	if !ok {
-		db, err = r.buildDb(dbName)
+		db, err = r.buildDb(shardName)
 		if err != nil {
 			return
 		}
@@ -71,7 +73,8 @@ func (r *Router) GetDb(key string) (db *Db, err error) {
 }
 
 func (r *Router) fetchDbName(key string) (string, error) {
-	resp, err := r.etcdCli.Get(context.Background(), key)
+	ek := r.toEtcdShardKey(key)
+	resp, err := r.etcdCli.Get(context.Background(), ek)
 	if err != nil {
 		return "", err
 	}
@@ -97,15 +100,59 @@ func (r *Router) buildDb(dbName string) (*Db, error) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	if odb, ok := r.dbNameMap[dbName]; ok {
+	if odb, ok := r.shardMap[dbName]; ok {
 		err = db.Close()
 		if err != nil {
 			return nil, errors.Wrap(err, "cannot close database while closing duplicated connection")
 		}
 		db = odb
 	} else {
-		r.dbNameMap[dbName] = db
+		r.shardMap[dbName] = db
 	}
 
 	return db, nil
+}
+
+func (r *Router) RegisterKey(key, shardName string) error {
+	if _, ok := dsMap[shardName]; !ok {
+		return fmt.Errorf("shard not found: %s", shardName)
+	}
+
+	if len(key) == 0 {
+		return errors.New("key is empty")
+	}
+
+	ek := r.toEtcdShardKey(key)
+
+	_, err := r.etcdCli.Put(context.Background(), ek, shardName)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Register: %s: %s\n", ek, shardName)
+	return nil
+}
+
+func (r *Router) RemoveKey(key string) error {
+	if len(key) == 0 {
+		return errors.New("key is empty")
+	}
+
+	ek := r.toEtcdShardKey(key)
+	resp, err := r.etcdCli.Delete(context.Background(), ek)
+	if err != nil {
+		return err
+	}
+
+	if resp.Deleted == 0 {
+		return fmt.Errorf("not key found: %s", key)
+	}
+
+	delete(r.shardKeyMap, key)
+	fmt.Printf("Remove: %s: %s\n", ek, key)
+
+	return nil
+}
+
+func (r *Router) toEtcdShardKey(rawKey string) string {
+	return shardKeyPrefix + rawKey
 }

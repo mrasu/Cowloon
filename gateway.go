@@ -20,11 +20,16 @@ func main() {
 		panic(err)
 	}
 
-	s := grpc.NewServer()
-	protos.RegisterUserMessageServer(s, &gateway.Server{})
-	reflection.Register(s)
+	s, err := gateway.NewServer()
+	if err != nil {
+		panic(err)
+	}
 
-	if err = s.Serve(lis); err != nil {
+	gs := grpc.NewServer()
+	protos.RegisterUserMessageServer(gs, s)
+	reflection.Register(gs)
+
+	if err = gs.Serve(lis); err != nil {
 		panic(err)
 	}
 	// runUpdate()

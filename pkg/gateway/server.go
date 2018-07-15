@@ -15,6 +15,18 @@ const (
 )
 
 type Server struct {
+	router *Router
+}
+
+func NewServer() (*Server, error) {
+	r, err := NewRouter()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Server{
+		router: r,
+	}, nil
 }
 
 func (s *Server) Query(ctx context.Context, in *protos.SqlRequest) (*protos.QueryResponse, error) {
@@ -66,15 +78,34 @@ func (s *Server) selectDb(in *protos.SqlRequest) (*Db, error) {
 		return nil, errors.New("key is empty")
 	}
 
-	r, err := NewRouter()
-	if err != nil {
-		return nil, err
-	}
-
-	d, err := r.GetDb(in.Key)
+	d, err := s.router.GetDb(in.Key)
 	if err != nil {
 		return nil, err
 	}
 
 	return d, nil
+}
+
+func (s *Server) RegisterKey(ctx context.Context, in *protos.KeyData) (*protos.SimpleResult, error) {
+	err := s.router.RegisterKey(in.Key, in.ShardName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protos.SimpleResult{
+		Success: true,
+		Message: "Success",
+	}, nil
+}
+
+func (s *Server) RemoveKey(ctx context.Context, in *protos.KeyData) (*protos.SimpleResult, error) {
+	err := s.router.RemoveKey(in.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	return &protos.SimpleResult{
+		Success: true,
+		Message: "Success",
+	}, nil
 }

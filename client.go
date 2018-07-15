@@ -12,6 +12,7 @@ import (
 
 func main() {
 	// execQuery("cluster1")
+	resetShards("cluster1", "1", "cluster2", "1")
 	fmt.Println("========")
 	runQueries()
 }
@@ -35,6 +36,41 @@ func etcd() {
 
 	for _, kv := range resp.Kvs {
 		fmt.Printf("%s: %s\n", kv.Key, kv.Value)
+	}
+}
+
+func resetShards(key1, shard1, key2, shard2 string) {
+	conn, err := grpc.Dial("localhost:15501", grpc.WithInsecure())
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	c := protos.NewUserMessageClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	s1 := &protos.KeyData{
+		Key:       key1,
+		ShardName: shard1,
+	}
+	s2 := &protos.KeyData{
+		Key:       key2,
+		ShardName: shard2,
+	}
+	_, err = c.RemoveKey(ctx, s1)
+	if err != nil {
+		fmt.Println(err)
+	}
+	_, err = c.RemoveKey(ctx, s2)
+
+	_, err = c.RegisterKey(ctx, s1)
+	if err != nil {
+		panic(err)
+	}
+	_, err = c.RegisterKey(ctx, s2)
+	if err != nil {
+		panic(err)
 	}
 }
 

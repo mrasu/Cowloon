@@ -1,0 +1,5 @@
+[mysqld]
+auto_increment_increment = 2
+auto_increment_offset = 2
+log-bin
+server-id=1002

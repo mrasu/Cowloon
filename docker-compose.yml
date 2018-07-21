@@ -5,7 +5,8 @@ services:
     ports:
       - '13306:3306'
     volumes:
-      - ./volumes/mysql1/data:/var/lib/mysql
+      - ./volumes/data/mysql1/:/var/lib/mysql
+      - ./volumes/mysql1/conf.d:/etc/mysql/conf.d
       - ./volumes/mysql1/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
@@ -14,7 +15,8 @@ services:
     ports:
       - '13307:3306'
     volumes:
-      - ./volumes/mysql2/data:/var/lib/mysql
+      - ./volumes/data/mysql2:/var/lib/mysql
+      - ./volumes/mysql2/conf.d:/etc/mysql/conf.d
       - ./volumes/mysql2/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'

@@ -7,6 +7,8 @@ import (
 	"errors"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/mrasu/Cowloon/pkg/db"
+	"github.com/mrasu/Cowloon/pkg/migrator"
 	"github.com/mrasu/Cowloon/pkg/protos"
 )
 
@@ -73,17 +75,17 @@ func (s *Server) Exec(ctx context.Context, in *protos.SqlRequest) (*protos.ExecR
 	return resp, nil
 }
 
-func (s *Server) selectDb(in *protos.SqlRequest) (*Db, error) {
+func (s *Server) selectDb(in *protos.SqlRequest) (*db.ShardConnection, error) {
 	if in.Key == "" {
 		return nil, errors.New("key is empty")
 	}
 
-	d, err := s.router.GetDb(in.Key)
+	sc, err := s.router.GetShardConnection(in.Key)
 	if err != nil {
 		return nil, err
 	}
 
-	return d, nil
+	return sc, nil
 }
 
 func (s *Server) RegisterKey(ctx context.Context, in *protos.KeyData) (*protos.SimpleResult, error) {
@@ -108,4 +110,20 @@ func (s *Server) RemoveKey(ctx context.Context, in *protos.KeyData) (*protos.Sim
 		Success: true,
 		Message: "Success",
 	}, nil
+}
+
+func (s *Server) MigrateShard(fromKey, toKey string) error {
+	fromS, err := s.router.GetShardConnection(fromKey)
+	if err != nil {
+		return err
+	}
+	toS, err := s.router.GetShardConnection(toKey)
+
+	a := migrator.NewApplier(fromS, toS)
+	err = a.Run()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

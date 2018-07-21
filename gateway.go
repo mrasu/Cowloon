@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net"
 
 	"github.com/mrasu/Cowloon/pkg/gateway"
@@ -15,6 +14,11 @@ const (
 )
 
 func main() {
+	// runServer()
+	readBinlog2()
+}
+
+func runServer() {
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		panic(err)
@@ -32,18 +36,15 @@ func main() {
 	if err = gs.Serve(lis); err != nil {
 		panic(err)
 	}
-	// runUpdate()
 }
 
-func runUpdate() {
-	db, err := gateway.NewDb("root@tcp(127.0.0.1:13307)/cowloon")
+func readBinlog2() {
+	s, err := gateway.NewServer()
 	if err != nil {
 		panic(err)
 	}
-
-	rows, err := db.Exec(`UPDATE messages SET text = CONCAT(text, "COOLA") WHERE id = 2`)
+	err = s.MigrateShard("cluster1", "cluster2")
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(rows)
 }

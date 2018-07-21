@@ -11,5 +11,4 @@
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
-volumes/mysql1/data/*
-volumes/mysql2/data/*
+volumes/data/*

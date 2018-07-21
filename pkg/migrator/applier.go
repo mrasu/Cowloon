@@ -1,6 +1,7 @@
 package migrator
 
 import (
+	"log"
 	"strings"
 
 	"fmt"
@@ -9,6 +10,8 @@ import (
 
 	"strconv"
 
+	"time"
+
 	"github.com/mrasu/Cowloon/pkg/db"
 	"github.com/pkg/errors"
 	"github.com/siddontang/go-mysql/canal"
@@ -16,7 +19,7 @@ import (
 )
 
 const (
-	copyRange = 1
+	copyRange = 1000
 )
 
 type Applier struct {
@@ -75,6 +78,8 @@ func (a *Applier) Run() error {
 		default:
 			{
 				if a.migrated {
+					log.Println("do nothing...")
+					time.Sleep(time.Second)
 					break
 				}
 
@@ -84,7 +89,6 @@ func (a *Applier) Run() error {
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -115,7 +119,7 @@ func (a *Applier) resetMaxMigrationId() error {
 }
 
 func (a *Applier) copyRows() error {
-	query := db.NewQuery("SELECT * FROM messages WHERE id > ? ORDER BY id LIMIT ?", []interface{}{a.appliedAtId, copyRange})
+	query := db.NewQuery("SELECT * FROM messages WHERE id > ? AND id <= ? ORDER BY id LIMIT ?", []interface{}{a.appliedAtId, a.maxMigrationId, copyRange})
 	columnNames, rows, err := a.fromShard.QueryQuery(query)
 
 	if err != nil {

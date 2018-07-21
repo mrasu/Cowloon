@@ -67,6 +67,7 @@ func (s *ShardConnection) QueryQuery(q *Query) ([]string, [][]sql.RawBytes, erro
 }
 
 func (s *ShardConnection) query(sqlText string, args ...interface{}) ([]string, [][]sql.RawBytes, error) {
+	log.Printf("sql:%s, args:%+v\n", sqlText, args)
 	queryRows, err := s.dataBase.Query(sqlText, args...)
 	if err != nil {
 		return nil, nil, err

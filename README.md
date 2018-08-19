@@ -5,7 +5,7 @@ Multi-tenant database management system.
 Cowloon is a management system which realizes ACID and scale-out without pain of distributed system.
 
 # Design
-<img src="https://github.com/mrasu/Cowloon/raw/master/docs/images/design.jpeg" width="100">
+<img src="https://github.com/mrasu/Cowloon/raw/master/docs/images/design.jpeg">
 
 1. App doesn't need to know which tenant belongs to which database.
 2. App must specify a tenant at every query to achieve ACID.

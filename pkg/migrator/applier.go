@@ -15,7 +15,6 @@ import (
 	"github.com/mrasu/Cowloon/pkg/db"
 	"github.com/pkg/errors"
 	"github.com/siddontang/go-mysql/canal"
-	"github.com/siddontang/go-mysql/mysql"
 )
 
 const (
@@ -54,12 +53,14 @@ func (a *Applier) Run() error {
 		panic(err)
 	}
 
+	ms, err := GetMasterStatus(a.fromShard)
+	if err != nil {
+		panic(err)
+	}
+
 	dmlEventChan := make(chan []*db.Query)
 	c.SetEventHandler(NewCanalHandler(a.fromShard.DbName, dmlEventChan))
-	go c.RunFrom(mysql.Position{
-		Name: "8ee68e1b3cb2-bin.000003",
-		Pos:  154,
-	})
+	go c.RunFrom(ms.ToMysqlPosition())
 
 	err = a.resetMaxMigrationId()
 	if err != nil {

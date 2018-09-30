@@ -47,9 +47,8 @@ func (s *ShardConnection) Query(sqlText string, args ...interface{}) ([]*protos.
 	var resultRows []*protos.Row
 	for _, row := range rows {
 		var columns []*protos.Column
-		for i := range columns {
+		for _, col := range row {
 			var value *wrappers.StringValue
-			col := row[i]
 			if col != nil {
 				val := string(col)
 				value = &wrappers.StringValue{Value: val}

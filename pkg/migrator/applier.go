@@ -18,10 +18,13 @@ import (
 )
 
 const (
-	copyRange = 1000
+	copyRange     = 1000
+	keyColumnName = "tenant_id"
 )
 
 type Applier struct {
+	key string
+
 	fromShard *db.ShardConnection
 	toShard   *db.ShardConnection
 
@@ -31,8 +34,9 @@ type Applier struct {
 	migrated       bool
 }
 
-func NewApplier(fromShard, toShard *db.ShardConnection) *Applier {
+func NewApplier(key string, fromShard, toShard *db.ShardConnection) *Applier {
 	return &Applier{
+		key:         key,
 		toShard:     toShard,
 		fromShard:   fromShard,
 		appliedAtId: 0,
@@ -59,7 +63,7 @@ func (a *Applier) Run() error {
 	}
 
 	dmlEventChan := make(chan []*db.Query)
-	c.SetEventHandler(NewCanalHandler(a.fromShard.DbName, dmlEventChan))
+	c.SetEventHandler(NewCanalHandler(a.fromShard.DbName, dmlEventChan, a.key))
 	go c.RunFrom(ms.ToMysqlPosition())
 
 	err = a.resetMaxMigrationId()
@@ -120,7 +124,7 @@ func (a *Applier) resetMaxMigrationId() error {
 }
 
 func (a *Applier) copyRows() error {
-	query := db.NewQuery("SELECT * FROM messages WHERE id > ? AND id <= ? ORDER BY id LIMIT ?", []interface{}{a.appliedAtId, a.maxMigrationId, copyRange})
+	query := db.NewQuery("SELECT * FROM messages WHERE id > ? AND id <= ? AND "+keyColumnName+" = ? ORDER BY id LIMIT ?", []interface{}{a.appliedAtId, a.maxMigrationId, a.key, copyRange})
 	columnNames, rows, err := a.fromShard.QueryQuery(query)
 
 	if err != nil {

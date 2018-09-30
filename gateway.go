@@ -43,7 +43,7 @@ func readBinlog2() {
 	if err != nil {
 		panic(err)
 	}
-	err = m.MigrateShard("cluster1", "cluster2")
+	err = m.MigrateShard("3", "shard1")
 	if err != nil {
 		panic(err)
 	}

@@ -112,14 +112,17 @@ func (m *Manager) RemoveKey(ctx context.Context, in *protos.KeyData) (*protos.Si
 	}, nil
 }
 
-func (m *Manager) MigrateShard(fromKey, toKey string) error {
-	fromS, err := m.router.GetShardConnection(fromKey)
+func (m *Manager) MigrateShard(key, toShardName string) error {
+	fromS, err := m.router.GetShardConnection(key)
 	if err != nil {
 		return err
 	}
-	toS, err := m.router.GetShardConnection(toKey)
+	toS, err := m.router.buildDb(toShardName)
+	if err != nil {
+		return err
+	}
 
-	a := migrator.NewApplier(fromS, toS)
+	a := migrator.NewApplier(key, fromS, toS)
 	err = a.Run()
 	if err != nil {
 		return err

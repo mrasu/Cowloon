@@ -106,7 +106,8 @@ func (s *ShardConnection) scanRows(rows *sql.Rows) ([]string, [][]sql.RawBytes, 
 }
 
 func (s *ShardConnection) Exec(sqlText string, args ...interface{}) (sql.Result, error) {
-	log.Printf("%s args:%+v", sqlText, args)
+	log.Printf("%s args:%s", sqlText, args)
+
 	result, err := s.dataBase.Exec(sqlText, args...)
 	if err != nil {
 		return nil, err

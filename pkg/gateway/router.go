@@ -20,8 +20,8 @@ var dataSource1 = []string{"root", "127.0.0.1:13306", "cowloon"}
 var dataSource2 = []string{"root", "127.0.0.1:13307", "cowloon"}
 
 var dsMap = map[string][]string{
-	"1": dataSource1,
-	"2": dataSource2,
+	"shard1": dataSource1,
+	"shard2": dataSource2,
 }
 var mu sync.RWMutex
 

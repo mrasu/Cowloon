@@ -20,3 +20,10 @@ services:
       - ./volumes/mysql2/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+  etcd:
+    image: bitnami/etcd
+    ports:
+      - 2379:2379
+      - 2380:2380
+    environment:
+      ALLOW_NONE_AUTHENTICATION: 'yes'

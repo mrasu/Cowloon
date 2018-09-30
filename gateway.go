@@ -24,13 +24,13 @@ func runServer() {
 		panic(err)
 	}
 
-	s, err := gateway.NewServer()
+	m, err := gateway.NewManager()
 	if err != nil {
 		panic(err)
 	}
 
 	gs := grpc.NewServer()
-	protos.RegisterUserMessageServer(gs, s)
+	protos.RegisterUserMessageServer(gs, m)
 	reflection.Register(gs)
 
 	if err = gs.Serve(lis); err != nil {
@@ -39,11 +39,11 @@ func runServer() {
 }
 
 func readBinlog2() {
-	s, err := gateway.NewServer()
+	m, err := gateway.NewManager()
 	if err != nil {
 		panic(err)
 	}
-	err = s.MigrateShard("cluster1", "cluster2")
+	err = m.MigrateShard("cluster1", "cluster2")
 	if err != nil {
 		panic(err)
 	}

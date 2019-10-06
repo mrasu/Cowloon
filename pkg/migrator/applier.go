@@ -1,29 +1,19 @@
 package migrator
 
 import (
-	"log"
-	"strings"
-
 	"fmt"
+	"log"
 
-	"database/sql"
-
-	"strconv"
+	"github.com/mrasu/Cowloon/pkg/migrator/reference"
 
 	"time"
 
 	"github.com/mrasu/Cowloon/pkg/db"
-	"github.com/pkg/errors"
 	"github.com/siddontang/go-mysql/canal"
 )
 
-const (
-	copyRange     = 1000
-	keyColumnName = "tenant_id"
-)
-
 type Applier struct {
-	key string
+	keyValue string
 
 	fromShard *db.ShardConnection
 	toShard   *db.ShardConnection
@@ -34,9 +24,9 @@ type Applier struct {
 	migrated       bool
 }
 
-func NewApplier(key string, fromShard, toShard *db.ShardConnection) *Applier {
+func NewApplier(kv string, fromShard, toShard *db.ShardConnection) *Applier {
 	return &Applier{
-		key:         key,
+		keyValue:    kv,
 		toShard:     toShard,
 		fromShard:   fromShard,
 		appliedAtId: 0,
@@ -62,11 +52,24 @@ func (a *Applier) Run() error {
 		panic(err)
 	}
 
+	keys := []reference.RootKey{{TableName: "users", ColumnName: "tenant_id", Key: a.keyValue}}
+	refs, err := reference.NewReferences(a.fromShard, "cowloon", keys)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("%v\n", refs)
 	dmlEventChan := make(chan []*db.Query)
-	c.SetEventHandler(NewCanalHandler(a.fromShard.DbName, dmlEventChan, a.key))
+
+	migrationTables := refs.ToMigrationTables()
+	ki, ti := 0, 0
+	firstTable := migrationTables[keys[ki]][ti]
+
+	cHandler := NewCanalHandler(a.fromShard.DbName, dmlEventChan)
+	cHandler.AddTable(firstTable)
+	c.SetEventHandler(cHandler)
 	go c.RunFrom(ms.ToMysqlPosition())
 
-	err = a.resetMaxMigrationId()
+	currentCopingTable, err := NewTable(firstTable, a.fromShard, a.toShard)
 	if err != nil {
 		return err
 	}
@@ -82,94 +85,41 @@ func (a *Applier) Run() error {
 			}
 		default:
 			{
-				if a.migrated {
-					log.Println("do nothing...")
-					time.Sleep(time.Second)
+				if currentCopingTable.Migrated {
+					hasNext := false
+					if len(migrationTables[keys[ki]]) > ti+1 {
+						ti++
+						hasNext = true
+					} else if len(migrationTables) > ki+1 {
+						ki++
+						ti = 0
+						hasNext = true
+					}
+
+					if hasNext {
+						mt := migrationTables[keys[ki]][ti]
+						t, err := NewTable(mt, a.fromShard, a.toShard)
+						if err != nil {
+							return err
+						}
+						cHandler.AddTable(mt)
+						currentCopingTable = t
+					} else {
+						log.Println("do nothing...")
+						time.Sleep(time.Second)
+					}
 					break
 				}
 
-				if err = a.copyRows(); err != nil {
+				if err = currentCopingTable.CopyRows(); err != nil {
 					return err
 				}
+				// if currentCopingTable.Migrated {
+				// 	cHandler.addTable(currentCopingTable)
+				// 	currentCopingTable = nextTable
+				// }
 			}
 		}
 	}
 	return nil
-}
-
-func (a *Applier) resetMaxMigrationId() error {
-	s := "SELECT MAX(id) FROM messages"
-	columns, rows, err := a.fromShard.QueryQuery(db.NewQuery(s, []interface{}{}))
-	if err != nil {
-		return err
-	}
-
-	if len(rows) != 1 {
-		return fmt.Errorf("resetMaxMigrationId returns %d rows", len(rows))
-	}
-
-	row := rows[0]
-	if len(columns) != 1 {
-		return fmt.Errorf("resetMaxMigrationId returns %d columns", len(columns))
-	}
-
-	column := row[0]
-	maxId, err := a.toInt(column)
-	if err != nil {
-		return errors.Wrap(err, fmt.Sprintf("Cannot convert(%v) to int", column))
-	}
-
-	a.maxMigrationId = maxId
-	return nil
-}
-
-func (a *Applier) copyRows() error {
-	query := db.NewQuery("SELECT * FROM messages WHERE id > ? AND id <= ? AND "+keyColumnName+" = ? ORDER BY id LIMIT ?", []interface{}{a.appliedAtId, a.maxMigrationId, a.key, copyRange})
-	columnNames, rows, err := a.fromShard.QueryQuery(query)
-
-	if err != nil {
-		return err
-	}
-
-	if len(rows) == 0 {
-		a.migrated = true
-		return nil
-	}
-
-	var values []string
-	var args []interface{}
-	var lastId int
-	for _, row := range rows {
-		var vs []string
-		for i, column := range row {
-			vs = append(vs, "?")
-			args = append(args, column)
-
-			if columnNames[i] == "id" {
-				lastId, err = a.toInt(column)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		values = append(values, "("+strings.Join(vs, ", ")+")")
-	}
-	insertQuery := "REPLACE INTO messages(" + strings.Join(columnNames, ",") + ") VALUES" + strings.Join(values, ", ")
-
-	_, err = a.toShard.Exec(insertQuery, args...)
-	if err != nil {
-		return err
-	}
-
-	a.appliedAtId = lastId
-	if len(rows) < copyRange {
-		a.migrated = true
-	}
-
-	return nil
-}
-
-func (a *Applier) toInt(bytes sql.RawBytes) (int, error) {
-	return strconv.Atoi(string(bytes))
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/mrasu/Cowloon/pkg/migrator/tableinfo"
+
 	"github.com/mrasu/Cowloon/pkg/db"
 	"github.com/siddontang/go-mysql/canal"
 )
@@ -13,16 +15,20 @@ type CanalHandler struct {
 	dbName       string
 	dmlEventChan chan []*db.Query
 
-	targetKey string
+	migratingTables []*tableinfo.MigrationTable
 }
 
-func NewCanalHandler(dbName string, dc chan []*db.Query, key string) *CanalHandler {
+func NewCanalHandler(dbName string, dc chan []*db.Query) *CanalHandler {
 	return &CanalHandler{
 		dbName:       dbName,
 		dmlEventChan: dc,
 
-		targetKey: key,
+		migratingTables: []*tableinfo.MigrationTable{},
 	}
+}
+
+func (c *CanalHandler) AddTable(t *tableinfo.MigrationTable) {
+	c.migratingTables = append(c.migratingTables, t)
 }
 
 func (c *CanalHandler) OnRow(ev *canal.RowsEvent) error {
@@ -35,14 +41,22 @@ func (c *CanalHandler) OnRow(ev *canal.RowsEvent) error {
 		return err
 	}
 
-	c.dmlEventChan <- queries
+	if len(queries) > 0 {
+		c.dmlEventChan <- queries
+	}
+
 	return nil
 }
 
 func (c *CanalHandler) toQuery(ev *canal.RowsEvent) ([]*db.Query, error) {
 	var queries []*db.Query
 	if ev.Action == canal.InsertAction {
-		rows, err := c.filterTargetRows(ev)
+		mt := c.matchedMigrationTable(ev)
+		if mt == nil {
+			return []*db.Query{}, nil
+		}
+
+		rows, err := c.filterTargetRows(ev, mt)
 		if err != nil {
 			return nil, err
 		}
@@ -59,12 +73,17 @@ func (c *CanalHandler) toQuery(ev *canal.RowsEvent) ([]*db.Query, error) {
 			return nil, fmt.Errorf("update event doesn't have two rows (rows: %d)", len(ev.Rows))
 		}
 
-		ki, err := c.getKeyColumnIndex(ev)
+		mt := c.matchedMigrationTable(ev)
+		if mt == nil {
+			return []*db.Query{}, nil
+		}
+
+		ki, err := c.getKeyColumnIndex(ev, mt)
 		if err != nil {
 			return nil, err
 		}
 
-		isT, err := c.isTarget(ev.Rows[0][ki])
+		isT, err := c.isTarget(mt, ev.Rows[0][ki])
 		if err != nil {
 			return nil, err
 		}
@@ -77,7 +96,12 @@ func (c *CanalHandler) toQuery(ev *canal.RowsEvent) ([]*db.Query, error) {
 			queries = append(queries, query)
 		}
 	} else if ev.Action == canal.DeleteAction {
-		rows, err := c.filterTargetRows(ev)
+		mt := c.matchedMigrationTable(ev)
+		if mt == nil {
+			return []*db.Query{}, nil
+		}
+
+		rows, err := c.filterTargetRows(ev, mt)
 		if err != nil {
 			return nil, err
 		}
@@ -94,15 +118,25 @@ func (c *CanalHandler) toQuery(ev *canal.RowsEvent) ([]*db.Query, error) {
 	return queries, nil
 }
 
-func (c *CanalHandler) filterTargetRows(ev *canal.RowsEvent) ([][]interface{}, error) {
-	ki, err := c.getKeyColumnIndex(ev)
+func (c *CanalHandler) matchedMigrationTable(ev *canal.RowsEvent) *tableinfo.MigrationTable {
+	for _, t := range c.migratingTables {
+		if ev.Table.Name == t.Name {
+			return t
+		}
+	}
+
+	return nil
+}
+
+func (c *CanalHandler) filterTargetRows(ev *canal.RowsEvent, t *tableinfo.MigrationTable) ([][]interface{}, error) {
+	ki, err := c.getKeyColumnIndex(ev, t)
 	if err != nil {
 		return nil, err
 	}
 
 	var rows [][]interface{}
 	for _, r := range ev.Rows {
-		isT, err := c.isTarget(r[ki])
+		isT, err := c.isTarget(t, r[ki])
 		if err != nil {
 			return nil, err
 		}
@@ -115,23 +149,23 @@ func (c *CanalHandler) filterTargetRows(ev *canal.RowsEvent) ([][]interface{}, e
 	return rows, nil
 }
 
-func (c *CanalHandler) getKeyColumnIndex(ev *canal.RowsEvent) (int, error) {
+func (c *CanalHandler) getKeyColumnIndex(ev *canal.RowsEvent, t *tableinfo.MigrationTable) (int, error) {
 	ki := -1
-	for i, c := range ev.Table.Columns {
-		if c.Name == keyColumnName {
+	for i, co := range ev.Table.Columns {
+		if co.Name == t.MigrationTargetColumnName {
 			ki = i
 			break
 		}
 	}
 
 	if ki == -1 {
-		return -1, fmt.Errorf(keyColumnName+" doesn't exist at %v", ev)
+		return -1, fmt.Errorf(t.MigrationTargetColumnName+" doesn't exist at %v", ev)
 	}
 
 	return ki, nil
 }
 
-func (c *CanalHandler) isTarget(columnValue interface{}) (bool, error) {
+func (c *CanalHandler) isTarget(t *tableinfo.MigrationTable, columnValue interface{}) (bool, error) {
 	var key string
 	switch c := columnValue.(type) {
 	case int:
@@ -146,5 +180,5 @@ func (c *CanalHandler) isTarget(columnValue interface{}) (bool, error) {
 		return false, fmt.Errorf("invalid type: %v", c)
 	}
 
-	return key == c.targetKey, nil
+	return t.MigrationTargetColumn.IsMigrationTarget(key), nil
 }

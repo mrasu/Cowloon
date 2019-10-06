@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/mrasu/Cowloon/pkg/migrator"
+
 	"errors"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/mrasu/Cowloon/pkg/db"
-	"github.com/mrasu/Cowloon/pkg/migrator"
 	"github.com/mrasu/Cowloon/pkg/protos"
 )
 

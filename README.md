@@ -22,4 +22,4 @@ and more.
 * [gh-ost](https://github.com/github/gh-ost)
 
 # Feature Plan
-<img src="https://github.com/mrasu/Cowloon/raw/master/docs/images/to_be.jpeg">
+<img src="https://github.com/mrasu/Cowloon/raw/master/docs/images/to_be.png">

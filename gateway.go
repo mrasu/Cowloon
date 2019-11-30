@@ -14,17 +14,16 @@ const (
 )
 
 func main() {
-	// runServer()
-	readBinlog2()
-}
-
-func runServer() {
-	lis, err := net.Listen("tcp", port)
+	m, err := gateway.NewManager()
 	if err != nil {
 		panic(err)
 	}
+	go runServer(m)
+	migrateShard(m)
+}
 
-	m, err := gateway.NewManager()
+func runServer(m *gateway.Manager) {
+	lis, err := net.Listen("tcp", port)
 	if err != nil {
 		panic(err)
 	}
@@ -38,12 +37,8 @@ func runServer() {
 	}
 }
 
-func readBinlog2() {
-	m, err := gateway.NewManager()
-	if err != nil {
-		panic(err)
-	}
-	err = m.MigrateShard("4", "shard1")
+func migrateShard(m *gateway.Manager) {
+	err := m.MigrateShard("4", "shard1")
 	if err != nil {
 		panic(err)
 	}

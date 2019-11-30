@@ -3,6 +3,9 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"sync"
+
+	"github.com/mrasu/Cowloon/pkg/lib"
 
 	"github.com/mrasu/Cowloon/pkg/migrator"
 
@@ -19,6 +22,9 @@ const (
 
 type Manager struct {
 	router *Router
+
+	runningQueryWg *sync.WaitGroup
+	stopper        *lib.Stopper
 }
 
 func NewManager() (*Manager, error) {
@@ -28,11 +34,16 @@ func NewManager() (*Manager, error) {
 	}
 
 	return &Manager{
-		router: r,
+		router:         r,
+		runningQueryWg: new(sync.WaitGroup),
+		stopper:        lib.NewStopper(),
 	}, nil
 }
 
 func (m *Manager) Query(ctx context.Context, in *protos.SqlRequest) (*protos.QueryResponse, error) {
+	m.markQueryStart()
+	defer m.markQueryEnd()
+
 	d, err := m.selectDb(in)
 	if err != nil {
 		return nil, err
@@ -48,6 +59,9 @@ func (m *Manager) Query(ctx context.Context, in *protos.SqlRequest) (*protos.Que
 }
 
 func (m *Manager) Exec(ctx context.Context, in *protos.SqlRequest) (*protos.ExecResponse, error) {
+	m.markQueryStart()
+	defer m.markQueryEnd()
+
 	d, err := m.selectDb(in)
 	if err != nil {
 		return nil, err
@@ -74,6 +88,15 @@ func (m *Manager) Exec(ctx context.Context, in *protos.SqlRequest) (*protos.Exec
 		LastInsertedId: lId,
 	}
 	return resp, nil
+}
+
+func (m *Manager) markQueryStart() {
+	m.stopper.WaitIfNeeded()
+	m.runningQueryWg.Add(1)
+}
+
+func (m *Manager) markQueryEnd() {
+	m.runningQueryWg.Done()
 }
 
 func (m *Manager) selectDb(in *protos.SqlRequest) (*db.ShardConnection, error) {
@@ -124,7 +147,17 @@ func (m *Manager) MigrateShard(key, toShardName string) error {
 	}
 
 	a := migrator.NewApplier(key, fromS, toS)
-	err = a.Run()
+	err = a.Run(func() bool {
+		m.stopper.Stop()
+		defer m.stopper.Start()
+
+		m.runningQueryWg.Wait()
+		err := m.router.RegisterKey(key, toShardName)
+		if err != nil {
+			return false
+		}
+		return true
+	})
 	if err != nil {
 		return err
 	}

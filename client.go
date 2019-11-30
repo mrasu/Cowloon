@@ -76,11 +76,14 @@ func resetShards() {
 }
 
 func runQueries() {
-	fmt.Println("Execute: cluster1")
-	runQuery("cluster1")
-	fmt.Println("========")
-	fmt.Println("Execute: cluster2")
-	runQuery("cluster2")
+	for i := 0; i < 10; i++ {
+		fmt.Println("Execute: shard1")
+		runQuery("1")
+		fmt.Println("========")
+		fmt.Println("Execute: shard2")
+		runQuery("2")
+		time.Sleep(time.Second)
+	}
 }
 
 func runQuery(key string) {
@@ -91,7 +94,7 @@ func runQuery(key string) {
 	defer conn.Close()
 
 	c := protos.NewUserMessageClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	req := &protos.SqlRequest{

@@ -34,7 +34,7 @@ func NewApplier(kv string, fromShard, toShard *db.ShardConnection) *Applier {
 	}
 }
 
-func (a *Applier) Run() error {
+func (a *Applier) Run(migratedCallback func() bool) error {
 	cfg := &canal.Config{
 		ServerID: 1,
 		Flavor:   "mysql",
@@ -106,6 +106,10 @@ func (a *Applier) Run() error {
 						currentCopingTable = t
 					} else {
 						log.Println("do nothing...")
+						res := migratedCallback()
+						if res {
+							return nil
+						}
 						time.Sleep(time.Second)
 					}
 					break

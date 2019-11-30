@@ -14,17 +14,12 @@ Cowloon is a management system which realizes ACID and scale-out without pain of
 5. Tenant's data can move between databases when needed.
 6. Cowloon decides a database to query. 
 
-# TODO
-
-* Migrate without downtime.
-    * Move multiple tables at the same time
-    * Change config
-    * no downtime
-* Run multiple Cowloon servers
-
 and more.
 
 # Inspired by
 
 * [Vitess](https://github.com/vitessio/vitess)
 * [gh-ost](https://github.com/github/gh-ost)
+
+# Feature Plan
+<img src="https://github.com/mrasu/Cowloon/raw/master/docs/images/to_be.jpeg">

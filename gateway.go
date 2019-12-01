@@ -18,8 +18,10 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	go runServer(m)
-	migrateShard(m)
+	// go runServer(m)
+	// migrateShard(m)
+
+	m.Start()
 }
 
 func runServer(m *gateway.Manager) {

@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/xerrors"
+
+	"github.com/mrasu/Cowloon/pkg/lib"
+
 	"sync"
 
 	"github.com/coreos/etcd/clientv3"
@@ -48,6 +52,61 @@ func NewRouter() (*Router, error) {
 		shardMap:    map[string]*db.ShardConnection{},
 		etcdCli:     cli,
 	}, nil
+}
+
+func (r *Router) StartHeatBeat(parent *lib.PanickerContext) {
+	ctx, _ := lib.WithPanic(parent)
+	defer ctx.Finish()
+
+	errCh := make(chan error)
+	for {
+		etcdCtx, _ := context.WithTimeout(ctx, 2*time.Second)
+
+		go func() {
+			_, err := r.etcdCli.Get(etcdCtx, "health-check")
+			errCh <- err
+		}()
+
+		select {
+		case err := <-errCh:
+			if err == nil {
+				time.Sleep(3 * time.Second)
+				break
+			}
+			ctx.Panic(xerrors.Errorf("failed to run etcd health check: %v", err))
+			return
+		case <-etcdCtx.Done():
+			ctx.Panic(xerrors.Errorf("failed to run etcd health check: %v", etcdCtx.Err()))
+			return
+		case <-parent.Done():
+			if err := r.etcdCli.Close(); err != nil {
+				fmt.Printf("failed to close etcd: %v\n", err)
+			} else {
+				fmt.Println("etcd terminated.")
+			}
+			return
+		}
+	}
+}
+
+func (r *Router) RunHealthCheck(parent context.Context) error {
+	ctx, _ := context.WithTimeout(parent, 1*time.Second)
+
+	errCh := make(chan error)
+	go func() {
+		_, err := r.etcdCli.Get(ctx, "health-check")
+		errCh <- err
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return xerrors.Errorf("failed to run etcd health check: %v", ctx.Err())
+		}
+		return nil
+	case <-ctx.Done():
+		return xerrors.Errorf("failed to run etcd health check: %v", ctx.Err())
+	}
 }
 
 func (r *Router) GetShardConnection(key string) (s *db.ShardConnection, err error) {

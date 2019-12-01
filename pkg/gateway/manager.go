@@ -3,7 +3,13 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
+
+	"golang.org/x/xerrors"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/mrasu/Cowloon/pkg/lib"
 
@@ -18,6 +24,7 @@ import (
 
 const (
 	ErrorNum = -2147483648
+	port     = ":15501"
 )
 
 type Manager struct {
@@ -38,6 +45,55 @@ func NewManager() (*Manager, error) {
 		runningQueryWg: new(sync.WaitGroup),
 		stopper:        lib.NewStopper(),
 	}, nil
+}
+
+func (m *Manager) Start() {
+	ctx, canFn := lib.WithPanic(context.Background())
+	go m.router.StartHeatBeat(ctx)
+	go m.startGrpcServer(ctx)
+
+	err := <-ctx.Panicked()
+	fmt.Printf("Error: %+v\n", err)
+	fmt.Println("Stopping....")
+
+	finWg := canFn()
+	finWg.Wait()
+
+	panic(err)
+}
+
+func (m *Manager) startGrpcServer(parent *lib.PanickerContext) {
+	ctx, canFn := lib.WithPanic(parent)
+	defer ctx.Finish()
+
+	lis, err := net.Listen("tcp", port)
+	if err != nil {
+		ctx.Panic(xerrors.Errorf("failed to start grpc: %v", err))
+		return
+	}
+
+	gs := grpc.NewServer()
+	protos.RegisterUserMessageServer(gs, m)
+	reflection.Register(gs)
+
+	errCh := make(chan error)
+	go func() {
+		if err = gs.Serve(lis); err != nil {
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err = <-errCh:
+		canFn()
+		ctx.Panic(xerrors.Errorf("failed to start grpc: %v", err))
+	case <-ctx.Done():
+		gs.Stop()
+		ctx.Panic(xerrors.Errorf("grpc terminated: %v", ctx.Err()))
+	case <-parent.Done():
+		fmt.Println("terminating grpc...")
+		gs.Stop()
+	}
 }
 
 func (m *Manager) Query(ctx context.Context, in *protos.SqlRequest) (*protos.QueryResponse, error) {
